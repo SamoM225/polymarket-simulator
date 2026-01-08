@@ -52,7 +52,7 @@ export function useMarketStore() {
   useRealtimeSubscriptions(state.user.id, setState);
   useSimulation(state.simulation, state.markets, dispatch);
 
-  const { handleLogin, handleLogout } = useAuth(setState);
+  const { handleLogin, handleLogout, handleAddBalance } = useAuth(setState);
 
   const selectMarket = useCallback(
     (marketId: string) => dispatch({ type: "select_market", marketId }),
@@ -108,6 +108,7 @@ export function useMarketStore() {
     clearMessage,
     login: handleLogin,
     logout: handleLogout,
+    addBalance: handleAddBalance,
 
     maxPositions: MAX_POSITIONS,
   };

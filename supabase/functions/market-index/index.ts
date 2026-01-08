@@ -334,6 +334,34 @@ async function handleSimulationTick(payload: ActionPayload) {
   return respond(JSON.stringify({ status: "ok", botUserId }), 200);
 }
 
+/**
+ * Pridá balance používateľovi.
+ */
+async function handleAddBalance(userId: string, amount: number) {
+  if (amount <= 0 || amount > 10000) {
+    return respond("Invalid amount (1-10000)", 400);
+  }
+
+  const { data: userRow, error: userErr } = await supabase
+    .from("users")
+    .select("balance")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (userErr) return respond("User fetch failed", 500);
+
+  const currentBalance = Number(userRow?.balance ?? 0);
+  const newBalance = currentBalance + amount;
+
+  const { error: balErr } = await supabase
+    .from("users")
+    .upsert({ id: userId, balance: newBalance }, { onConflict: "id" });
+
+  if (balErr) return respond("Balance update failed", 500);
+
+  return respond(JSON.stringify({ status: "ok", balance: newBalance }), 200);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return respond("ok", 200);
@@ -356,6 +384,9 @@ Deno.serve(async (req) => {
     }
     if (action === "close_position") {
       return await handleClosePosition(userId, payload);
+    }
+    if (action === "add_balance") {
+      return await handleAddBalance(userId, payload.amount ?? 0);
     }
     return respond("Unknown action", 400);
   } catch (error) {

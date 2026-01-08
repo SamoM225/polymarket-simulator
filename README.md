@@ -1,16 +1,7 @@
 # Polymarket Simulator 🏆
 
-Realtime predikčný trh simulátor inšpirovaný [Polymarket](https://polymarket.com/). Postavaný na Next.js 16 + Supabase s LMSR (Logarithmic Market Scoring Rule) algoritmom pre výpočet cien.
+Realtime predikčný trh simulátor inšpirovaný [Polymarket](https://polymarket.com/). Postavaný na Next.js + Supabase s LMSR (Logarithmic Market Scoring Rule) algoritmom pre výpočet cien.
 
-## ✨ Funkcie
-
-- **Realtime aktualizácie** - Supabase Realtime pre live sync pravdepodobností
-- **LMSR market maker** - Automatický výpočet cien a pravdepodobností
-- **Farebné rozlíšenie** - Domáci (🔵 modrá), Remíza (🟡 žltá), Hostia (🔴 červená)
-- **Toast notifikácie** - User-friendly správy o stave stávok
-- **Simulácia trhu** - Automatické generovanie stávok pre testovanie
-- **Portfolio management** - Sledovanie otvorených pozícií s PnL
-- **Cooldown systém** - 1s cooldown medzi stávkami, max 3 pozície
 
 ---
 
@@ -20,7 +11,6 @@ Realtime predikčný trh simulátor inšpirovaný [Polymarket](https://polymarke
 
 - Node.js 18+
 - npm alebo pnpm
-- Supabase projekt (voliteľné - funguje aj bez)
 
 ### 1. Klonovanie a inštalácia
 
@@ -54,7 +44,7 @@ Otvor [http://localhost:3000](http://localhost:3000) v prehliadači.
 
 Aplikácia vyžaduje Supabase pre plnú funkcionalitu. Nasleduj tieto kroky:
 
-### ⚠️ Dôležité nastavenia Auth
+### Dôležité nastavenia Auth
 
 Pre jednoduchý demo login (bez emailovej verifikácie) nastav v Supabase Dashboard:
 

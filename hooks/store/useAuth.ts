@@ -106,5 +106,64 @@ export function useAuth(setState: SetState) {
     return null;
   };
 
-  return { handleLogin, handleLogout };
+  /**
+   * Pridá balance aktuálnemu používateľovi.
+   */
+  const handleAddBalance = async (amount: number): Promise<string | null> => {
+    if (!supabase) {
+      return "Supabase client nie je k dispozícii";
+    }
+
+    setState((s) => ({ ...s, loadingUserState: true }));
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData?.session?.user?.id;
+
+    if (!userId) {
+      setState((s) => ({ ...s, loadingUserState: false }));
+      return "Používateľ nie je prihlásený";
+    }
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/market-index`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionData.session?.access_token}`,
+          },
+          body: JSON.stringify({
+            action: "add_balance",
+            payload: { userId, amount },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        setState((s) => ({ ...s, loadingUserState: false }));
+        return text || "Pridanie balance zlyhalo";
+      }
+
+      const result = await response.json();
+
+      setState((s) => ({
+        ...s,
+        user: {
+          ...s.user,
+          balance: result.balance,
+        },
+        loadingUserState: false,
+        lastActionMessage: `Pridané ${amount} €`,
+      }));
+
+      return null;
+    } catch (error) {
+      setState((s) => ({ ...s, loadingUserState: false }));
+      return "Chyba pri pridávaní balance";
+    }
+  };
+
+  return { handleLogin, handleLogout, handleAddBalance };
 }

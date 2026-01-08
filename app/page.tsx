@@ -42,6 +42,10 @@ export default function Home() {
     );
   };
 
+  const handleAddBalance = (amount: number) => {
+    store.addBalance(amount);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
       <Navbar
@@ -52,6 +56,7 @@ export default function Home() {
         onLoginClick={() => setAuthOpen(true)}
         onLogout={handleLogout}
         onToggleSimulation={handleToggleSimulation}
+        onAddBalance={handleAddBalance}
       />
 
       <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-6">
