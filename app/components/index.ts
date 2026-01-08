@@ -6,3 +6,4 @@ export { AuthModal } from "./AuthModal";
 export { ProbabilityChart, ChartLegend } from "./ProbabilityChart";
 export { Toast } from "./Toast";
 export { Spinner } from "./Spinner";
+export { EventNotification } from "./EventNotification";

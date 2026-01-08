@@ -1,0 +1,14 @@
+{
+  "fee": {
+    "enabled": true,
+    "rate": 0.02
+  },
+  "simulation": {
+    "normalIntervalMs": 900,
+    "eventIntervalMs": 3000,
+    "normalMinAmount": 5,
+    "normalMaxAmount": 45,
+    "eventMinPercent": 50,
+    "eventMaxPercent": 100
+  }
+}

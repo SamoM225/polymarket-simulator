@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { useMarketStore } from "../hooks/useMarketStore";
+import { useSettingsStore } from "../hooks/store";
 import { OutcomeId } from "../lib/types";
 import {
   Navbar,
@@ -15,6 +16,7 @@ import {
 
 export default function Home() {
   const store = useMarketStore();
+  const { settings, isLoaded, setFee, setSimulation, reset } = useSettingsStore();
   const [authOpen, setAuthOpen] = useState(false);
 
   const isAuthed = store.user.authenticated ?? false;
@@ -57,6 +59,10 @@ export default function Home() {
         onLogout={handleLogout}
         onToggleSimulation={handleToggleSimulation}
         onAddBalance={handleAddBalance}
+        settings={isLoaded ? settings : null}
+        onFeeChange={setFee}
+        onSimulationChange={setSimulation}
+        onResetSettings={reset}
       />
 
       <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-6">

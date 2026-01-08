@@ -32,6 +32,7 @@ interface ActionPayload {
   amount?: number;
   positionId?: string;
   userId?: string;
+  feeRate?: number;
 }
 
 /**
@@ -172,6 +173,7 @@ async function handlePlaceBet(userId: string, payload: ActionPayload) {
 
 /**
  * Uzavrie pozíciu používateľa a vyplatí mu peniaze podľa LMSR.
+ * Fee sa odpočíta z výplaty ak je zapnuté.
  */
 async function handleClosePosition(userId: string, payload: ActionPayload) {
   if (!payload.positionId || !payload.marketId || !payload.outcomeId) {
@@ -196,7 +198,12 @@ async function handleClosePosition(userId: string, payload: ActionPayload) {
   if (!pos) return respond("Position not found", 404);
 
   const b = lmsrB(totalPool);
-  const payout = lmsrSellPayout(pools, b, payload.outcomeId!, Number(pos.shares ?? 0));
+  const rawPayout = lmsrSellPayout(pools, b, payload.outcomeId!, Number(pos.shares ?? 0));
+  
+  // Aplikuj fee ak je zapnuté (feeRate prichádza z frontendu)
+  const feeRate = payload.feeRate ?? 0;
+  const feeAmount = rawPayout * feeRate;
+  const payout = rawPayout - feeAmount;
 
   const nextPools: Pools = {
     ...pools,
@@ -245,10 +252,11 @@ async function handleClosePosition(userId: string, payload: ActionPayload) {
     shares: pos.shares ?? 0,
     price: sellPrice,
     amount: payout,
+    fee: feeAmount,
   });
   if (tradeErr) return respond("Trade insert failed", 500);
 
-  return respond(JSON.stringify({ status: "ok", payout, balance: newBalance }), 200);
+  return respond(JSON.stringify({ status: "ok", payout, fee: feeAmount, balance: newBalance }), 200);
 }
 
 /** Bot používatelia pre simuláciu */

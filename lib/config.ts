@@ -11,6 +11,8 @@ export const SIMULATION = {
   botUserIds: [
     "f168def6-0358-4117-9257-15c8984aadf5",
     "c7b34e02-c76e-4a0a-b94d-95365adf05d6",
+    "3cbee7e0-8369-443b-8c9d-50d265dd511d",
+    "53cc6e2f-c181-4a4d-bc08-e7b1a1eeab44"
   ],
 };
 

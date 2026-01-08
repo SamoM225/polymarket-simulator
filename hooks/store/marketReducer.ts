@@ -8,7 +8,8 @@ import {
   lmsrSellPayout,
 } from "../../lib/marketUtils";
 import { MarketStoreState, OutcomeId, Position, SimulationState } from "../../lib/types";
-import { FEES, SUPABASE_WRITE_THROUGH } from "../../lib/config";
+import { SUPABASE_WRITE_THROUGH } from "../../lib/config";
+import { loadSettings } from "../../lib/settingsStore";
 import { MarketAction, MAX_POSITIONS, COOLDOWN_MS } from "./types";
 
 type SendEdgeActionFn = (
@@ -82,7 +83,7 @@ function handleToggleSimulation(
 
 function handleSimulationTick(
   prev: MarketStoreState,
-  action: { type: "simulation_tick"; marketId: string; outcomeId: OutcomeId; amount: number },
+  action: { type: "simulation_tick"; marketId: string; outcomeId: OutcomeId; amount: number; isSell?: boolean },
   context: { sendEdgeAction: SendEdgeActionFn; postActionRef: React.MutableRefObject<(() => void) | null> },
 ): MarketStoreState {
   const { sendEdgeAction, postActionRef } = context;
@@ -97,18 +98,23 @@ function handleSimulationTick(
     return acc;
   }, {} as Record<OutcomeId, number>);
 
-  const deltaResult = lmsrDeltaForPayment(pools, b, action.outcomeId, action.amount);
+  // Pri predaji ideme opačným smerom (záporný amount pre delta výpočet)
+  const effectiveAmount = action.isSell ? -action.amount * 0.5 : action.amount;
+  const deltaResult = lmsrDeltaForPayment(pools, b, action.outcomeId, Math.abs(effectiveAmount));
   if (!deltaResult) return prev;
 
-  const { delta } = deltaResult;
+  // Pri predaji delta ide opačne
+  const delta = action.isSell ? -deltaResult.delta * 0.3 : deltaResult.delta;
   const updatedOutcomes = market.outcomes.map((o) =>
-    o.id === action.outcomeId ? { ...o, pool: o.pool + delta } : o,
+    o.id === action.outcomeId ? { ...o, pool: Math.max(100, o.pool + delta) } : o,
   );
 
+  // Pri predaji likvidita klesá, pri nákupe rastie
+  const liquidityChange = action.isSell ? -action.amount * 0.4 : action.amount * 0.3;
   const updatedMarket = {
     ...market,
     outcomes: updatedOutcomes,
-    liquidity: market.liquidity + action.amount * 0.3,
+    liquidity: Math.max(10000, market.liquidity + liquidityChange),
   };
 
   const nextMarkets = [...prev.markets];
@@ -174,7 +180,10 @@ function handlePlaceBet(
     return acc;
   }, {} as Record<OutcomeId, number>);
   const b = lmsrB(market);
-  const fee = FEES.enabled ? action.amount * FEES.rate : 0;
+  
+  // Načítaj aktuálne fee nastavenia z localStorage
+  const feeSettings = loadSettings().fee;
+  const fee = feeSettings.enabled ? action.amount * feeSettings.rate : 0;
   const tradable = action.amount - fee;
 
   if (tradable <= 0) {
@@ -274,12 +283,15 @@ function handlePlaceBet(
     };
   }
 
+  // Pre správu o fee
+  const feeMessage = feeSettings.enabled ? ` s fee ${(feeSettings.rate * 100).toFixed(1)}%` : "";
+
   return {
     ...prev,
     markets: nextMarkets,
     positions: newPositions,
     betCooldowns: nextCooldowns,
-    lastActionMessage: `Stavka ${formatCurrency(action.amount)}${FEES.enabled ? ` s fee ${(FEES.rate * 100).toFixed(1)}%` : ""} na ${action.outcomeId}. Cakam na potvrdenie...`,
+    lastActionMessage: `Stavka ${formatCurrency(action.amount)}${feeMessage} na ${action.outcomeId}. Cakam na potvrdenie...`,
   };
 }
 
@@ -312,7 +324,10 @@ function handleClosePosition(
   }, {} as Record<OutcomeId, number>);
   const b = lmsrB(market);
   const rawPayout = lmsrSellPayout(pools, b, position.outcomeId, position.shares);
-  const fee = FEES.enabled ? rawPayout * FEES.rate : 0;
+  
+  // Načítaj aktuálne fee nastavenia z localStorage
+  const closeFeeSettings = loadSettings().fee;
+  const fee = closeFeeSettings.enabled ? rawPayout * closeFeeSettings.rate : 0;
   const payout = rawPayout - fee;
 
   const updatedOutcomes = market.outcomes.map((o) =>
@@ -327,11 +342,13 @@ function handleClosePosition(
   nextPositions.splice(posIndex, 1);
 
   if (SUPABASE_WRITE_THROUGH) {
+    const feeRateToSend = closeFeeSettings.enabled ? closeFeeSettings.rate : 0;
     postActionRef.current = () => {
       sendEdgeAction("close_position", {
         positionId: position.id,
         marketId: market.id,
         outcomeId: position.outcomeId,
+        feeRate: feeRateToSend,
       });
     };
   }

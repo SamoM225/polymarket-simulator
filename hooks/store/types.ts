@@ -25,6 +25,8 @@ export type MarketAction =
       marketId: string;
       outcomeId: OutcomeId;
       amount: number;
+      isEvent?: boolean;
+      isSell?: boolean;
     }
   | {
       type: "toggle_simulation";

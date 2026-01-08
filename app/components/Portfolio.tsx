@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 import {
   OUTCOME_LABELS,
@@ -8,7 +8,9 @@ import {
   lmsrB,
   formatCurrency,
   priceFromProbability,
+  lmsrSellPayout,
 } from "../../lib/marketUtils";
+import { loadSettings, FeeSettings } from "../../lib/settingsStore";
 import { Market, Position, OutcomeId } from "../../lib/types";
 import { OUTCOME_COLORS } from "./MarketList";
 import { Spinner } from "./Spinner";
@@ -31,6 +33,28 @@ export function Portfolio({
   onToggleSimulation,
 }: PortfolioProps) {
   const [closingPositionId, setClosingPositionId] = useState<string | null>(null);
+  const [feeSettings, setFeeSettings] = useState<FeeSettings>({ enabled: true, rate: 0.02 });
+
+  // Načítaj fee nastavenia a sleduj zmeny
+  useEffect(() => {
+    const updateFeeSettings = () => {
+      setFeeSettings(loadSettings().fee);
+    };
+    
+    updateFeeSettings();
+    
+    // Sleduj zmeny v localStorage
+    const handleStorage = () => updateFeeSettings();
+    window.addEventListener("storage", handleStorage);
+    
+    // Polling pre zmeny v tom istom okne (localStorage event sa nespustí)
+    const pollInterval = setInterval(updateFeeSettings, 500);
+    
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      clearInterval(pollInterval);
+    };
+  }, []);
 
   const handleClosePosition = (positionId: string) => {
     setClosingPositionId(positionId);
@@ -48,14 +72,25 @@ export function Portfolio({
           acc[o.id] = o.pool;
           return acc;
         }, {} as Record<OutcomeId, number>);
-        const probs = calculateProbabilities(pools, lmsrB(market));
+        const b = lmsrB(market);
+        const probs = calculateProbabilities(pools, b);
         const price = priceFromProbability(probs[pos.outcomeId]);
         const value = pos.shares * price;
-        const pnl = value - pos.amountSpent;
-        return { pos, market, price, value, pnl };
+        
+        // Výpočet payout pri predaji
+        const rawPayout = lmsrSellPayout(pools, b, pos.outcomeId, pos.shares);
+        const feeRate = feeSettings.rate;
+        const feeEnabled = feeSettings.enabled;
+        const feeAmount = feeEnabled ? rawPayout * feeRate : 0;
+        const netPayout = rawPayout - feeAmount;
+        
+        // PnL zahŕňa fee - človek je automaticky v mínuse o fee
+        const pnl = netPayout - pos.amountSpent;
+        
+        return { pos, market, price, value, pnl, rawPayout, feeAmount, netPayout, feeRate, feeEnabled };
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  }, [markets, positions]);
+  }, [markets, positions, feeSettings]);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -111,11 +146,17 @@ function PositionRow({
     price: number;
     value: number;
     pnl: number;
+    rawPayout: number;
+    feeAmount: number;
+    netPayout: number;
+    feeRate: number;
+    feeEnabled: boolean;
   };
   isClosing: boolean;
   onClose: () => void;
 }) {
-  const { pos, market, price, value, pnl } = data;
+  const [showFeeTooltip, setShowFeeTooltip] = useState(false);
+  const { pos, market, price, value, pnl, rawPayout, feeAmount, netPayout, feeRate, feeEnabled } = data;
   const isUp = pnl >= 0;
   const colors = OUTCOME_COLORS[pos.outcomeId];
   
@@ -161,25 +202,80 @@ function PositionRow({
             {isUp ? "+" : ""}{formatCurrency(pnl)}
           </span>
         </div>
-        <button
-          onClick={onClose}
-          disabled={isClosing || !pos.synced}
-          className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
-        >
-          {isClosing ? (
-            <>
-              <Spinner size="xs" />
-              Zatvárám...
-            </>
-          ) : !pos.synced ? (
-            <>
-              <Spinner size="xs" />
-              Čakám...
-            </>
-          ) : (
-            "Ukončiť pozíciu"
-          )}
-        </button>
+        
+        {/* Payout info s tooltipom */}
+        <div className="flex items-center gap-2">
+          <div 
+            className="relative"
+            onMouseEnter={() => setShowFeeTooltip(true)}
+            onMouseLeave={() => setShowFeeTooltip(false)}
+          >
+            <div className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 px-3 py-1.5 cursor-help">
+              <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-xs font-bold text-emerald-700">
+                {formatCurrency(netPayout)}
+              </span>
+              {feeEnabled && (
+                <svg className="h-3 w-3 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+            </div>
+            
+            {/* Fee Tooltip */}
+            {showFeeTooltip && (
+              <div className="absolute bottom-full right-0 mb-2 z-40 w-56 rounded-xl bg-slate-900 p-3 shadow-xl">
+                <div className="absolute bottom-0 right-4 -mb-1.5 h-3 w-3 rotate-45 bg-slate-900"></div>
+                <p className="text-xs font-semibold text-white mb-2">Detaily výplaty</p>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Hrubá výplata:</span>
+                    <span className="text-white font-medium">{formatCurrency(rawPayout)}</span>
+                  </div>
+                  {feeEnabled ? (
+                    <>
+                      <div className="flex justify-between text-amber-400">
+                        <span>Fee ({(feeRate * 100).toFixed(1)}%):</span>
+                        <span className="font-medium">-{formatCurrency(feeAmount)}</span>
+                      </div>
+                      <div className="border-t border-slate-700 pt-1.5 flex justify-between">
+                        <span className="text-emerald-400 font-semibold">Dostaneš:</span>
+                        <span className="text-emerald-400 font-bold">{formatCurrency(netPayout)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-emerald-400">
+                      <span className="font-semibold">Dostaneš:</span>
+                      <span className="font-bold">{formatCurrency(netPayout)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <button
+            onClick={onClose}
+            disabled={isClosing || !pos.synced}
+            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
+          >
+            {isClosing ? (
+              <>
+                <Spinner size="xs" />
+                Zatvárám...
+              </>
+            ) : !pos.synced ? (
+              <>
+                <Spinner size="xs" />
+                Čakám...
+              </>
+            ) : (
+              "Ukončiť pozíciu"
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
