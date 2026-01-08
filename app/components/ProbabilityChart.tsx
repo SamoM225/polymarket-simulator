@@ -50,22 +50,42 @@ export function ProbabilityChart({ history, mode }: ProbabilityChartProps) {
       return acc;
     }, {} as Record<OutcomeId, { raw: number[]; smooth: number[] }>);
 
-    const maxVal =
-      mode === "probability"
-        ? 1
-        : Math.max(
-            ...OUTCOME_ORDER.flatMap((id) => series[id].raw),
-            0.1,
-          );
-    return { series, maxVal };
+    // Dynamický rozsah pre lepšiu vizualizáciu
+    const allValues = OUTCOME_ORDER.flatMap((id) => series[id].smooth);
+    const dataMin = Math.min(...allValues);
+    const dataMax = Math.max(...allValues);
+    
+    // Pridaj padding 10% hore a dole
+    const range = dataMax - dataMin;
+    const padding = Math.max(range * 0.15, 0.02); // min 2% padding
+    
+    let minVal = Math.max(0, dataMin - padding);
+    let maxVal = mode === "probability" 
+      ? Math.min(1, dataMax + padding)
+      : dataMax + padding;
+    
+    // Zaokrúhli na pekné čísla (5% kroky pre probability)
+    if (mode === "probability") {
+      minVal = Math.floor(minVal * 20) / 20; // zaokrúhli na 5%
+      maxVal = Math.ceil(maxVal * 20) / 20;
+      // Zabezpeč minimálny rozsah 15%
+      if (maxVal - minVal < 0.15) {
+        const center = (maxVal + minVal) / 2;
+        minVal = Math.max(0, center - 0.075);
+        maxVal = Math.min(1, center + 0.075);
+      }
+    }
+    
+    return { series, minVal, maxVal };
   }, [history, mode]);
 
-  const buildPath = (values: number[], maxVal: number) => {
+  const buildPath = (values: number[], minVal: number, maxVal: number) => {
+    const range = maxVal - minVal;
     return values
       .map((v, idx) => {
         const x =
           count === 1 ? 0 : (idx / Math.max(count - 1, 1)) * width;
-        const y = height - (v / maxVal) * height;
+        const y = height - ((v - minVal) / range) * height;
         return `${idx === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
       })
       .join(" ");
@@ -128,11 +148,10 @@ export function ProbabilityChart({ history, mode }: ProbabilityChartProps) {
           strokeWidth={1}
         />
         {Array.from({ length: 5 }).map((_, i) => {
-          const val =
-            mode === "probability"
-              ? i / 4
-              : (i / 4) * allSeries.maxVal;
-          const y = height - (val / allSeries.maxVal) * height;
+          const { minVal, maxVal } = allSeries;
+          const range = maxVal - minVal;
+          const val = minVal + (i / 4) * range;
+          const y = height - (i / 4) * height;
           return (
             <g key={i}>
               <line
@@ -158,12 +177,14 @@ export function ProbabilityChart({ history, mode }: ProbabilityChartProps) {
         })}
         {OUTCOME_ORDER.map((id) => {
           const { raw, smooth } = allSeries.series[id];
+          const { minVal, maxVal } = allSeries;
+          const range = maxVal - minVal;
           const lastIdx = smooth.length - 1;
           const lastX =
             smooth.length === 1
               ? 0
               : (lastIdx / Math.max(count - 1, 1)) * width;
-          const lastY = height - (smooth[lastIdx] / allSeries.maxVal) * height;
+          const lastY = height - ((smooth[lastIdx] - minVal) / range) * height;
           const hoverValue = smooth[Math.min(hoverIdx, smooth.length - 1)];
           const hoverX =
             smooth.length === 1
@@ -171,12 +192,12 @@ export function ProbabilityChart({ history, mode }: ProbabilityChartProps) {
               : (Math.min(hoverIdx, smooth.length - 1) /
                   Math.max(count - 1, 1)) *
                 width;
-          const hoverY = height - (hoverValue / allSeries.maxVal) * height;
+          const hoverY = height - ((hoverValue - minVal) / range) * height;
 
           return (
             <g key={id}>
               <path
-                d={buildPath(raw, allSeries.maxVal)}
+                d={buildPath(raw, minVal, maxVal)}
                 fill="none"
                 stroke={OUTCOME_COLORS[id]}
                 strokeOpacity={0.25}
@@ -184,7 +205,7 @@ export function ProbabilityChart({ history, mode }: ProbabilityChartProps) {
                 strokeLinecap="round"
               />
               <path
-                d={buildPath(smooth, allSeries.maxVal)}
+                d={buildPath(smooth, minVal, maxVal)}
                 fill="none"
                 stroke={OUTCOME_COLORS[id]}
                 strokeWidth={3}
