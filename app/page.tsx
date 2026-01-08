@@ -70,7 +70,7 @@ export default function Home() {
 
           <BettingPanel
             market={store.selectedMarket}
-            maxBet={100}
+            maxBet={store.selectedMarket ? store.selectedMarket.liquidity * 0.1 : 0}
             isAuthenticated={isAuthed}
             onPlaceBet={handlePlaceBet}
             onLoginRequired={() => setAuthOpen(true)}
