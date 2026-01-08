@@ -333,7 +333,7 @@ function BetControls({
               {cooldown ? "Počkaj..." : "Spracovávam..."}
             </>
           ) : isAuthenticated ? (
-            "Potvrdiť stávku"
+            "Otvoriť pozíciu"
           ) : (
             "Prihlás sa"
           )}

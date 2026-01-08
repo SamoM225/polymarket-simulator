@@ -177,7 +177,7 @@ function PositionRow({
               Čakám...
             </>
           ) : (
-            "Uzavrieť"
+            "Ukončiť pozíciu"
           )}
         </button>
       </div>
