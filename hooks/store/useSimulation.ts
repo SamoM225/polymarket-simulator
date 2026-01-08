@@ -93,7 +93,7 @@ export function useSimulation(
         let amount: number;
 
         if (isEventTime) {
-          // Veľký event - viacero hráčov nakúpi naraz
+          // Veľký event - jedna strana nakúpi, druhá predá = výrazný spike
           const maxBet = clampBetToLimits(999999, market);
           const minPercent = settings.simulation.eventMinPercent / 100;
           const maxPercent = settings.simulation.eventMaxPercent / 100;
@@ -110,11 +110,26 @@ export function useSimulation(
             onEventOccurred(eventType, market.id, outcomeId);
           }
 
-          // Spusti kaskádu - ďalší hráči reagujú na event
+          // Opačná strana predáva (panický predaj)
+          const oppositeOutcome = getOppositeOutcome(outcomeId);
+          const panicSellAmount = Math.round(amount * 0.6);
+          
+          setTimeout(() => {
+            dispatch({
+              type: "simulation_tick",
+              marketId: market.id,
+              outcomeId: oppositeOutcome,
+              amount: panicSellAmount,
+              isEvent: false,
+              isSell: true,
+            });
+          }, 100);
+
+          // Kaskáda nákupov na víťaznú stranu
           setTimeout(() => {
             const followPlayer = pickRandom(SIM_PLAYERS.filter(p => p.style === "momentum"));
             if (followPlayer) {
-              const followAmount = Math.round(amount * 0.3 * followPlayer.riskTolerance);
+              const followAmount = Math.round(amount * 0.4 * followPlayer.riskTolerance);
               dispatch({
                 type: "simulation_tick",
                 marketId: market.id,
@@ -124,6 +139,18 @@ export function useSimulation(
               });
             }
           }, 200);
+
+          // Ďalší panický predaj opačnej strany
+          setTimeout(() => {
+            dispatch({
+              type: "simulation_tick",
+              marketId: market.id,
+              outcomeId: oppositeOutcome,
+              amount: Math.round(panicSellAmount * 0.5),
+              isEvent: false,
+              isSell: true,
+            });
+          }, 300);
 
           setTimeout(() => {
             const followPlayer2 = pickRandom(SIM_PLAYERS);
